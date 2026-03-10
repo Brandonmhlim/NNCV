@@ -1,0 +1,6 @@
+data/
+*.sif
+*.out
+.env
+*.pt
+wandb/

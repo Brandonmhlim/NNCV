@@ -90,29 +90,59 @@ def main(args):
     # Define the device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    ############## i made changes ##############
+    ##### default #####
     # Define the transforms to apply to the data
-    transform = Compose([
-        ToImage(),
-        Resize((256, 256)),
-        ToDtype(torch.float32, scale=True),
-        Normalize((0.5,), (0.5,)),
-    ])
+    #transform = Compose([
+    #    ToImage(),
+    #    Resize((256, 256)),
+    #    ToDtype(torch.float32, scale=True),
+    #    Normalize((0.5,), (0.5,)),
+    #])
 
     # Load the dataset and make a split for training and validation
+    #train_dataset = Cityscapes(
+    #    args.data_dir, 
+    #    split="train", 
+    #    mode="fine", 
+    #    target_type="semantic", 
+    #    transforms=transform
+    #)
+    #valid_dataset = Cityscapes(
+    #    args.data_dir, 
+    #    split="val", 
+    #    mode="fine", 
+    #    target_type="semantic", 
+    #    transforms=transform
+    #)
+    ##### default #####
+    ############## i made changes ##############
+    
+    ############## i made changes ##############
+    ##### new version #####
+    image_transform = Compose([
+        ToImage(),
+        Resize((256, 256)), 
+        ToDtype(torch.float32, scale=True),
+        Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+    ])
+
+    target_transform = Compose([
+        ToImage(),
+        Resize((256, 256)),
+        ToDtype(torch.int64, scale=False),
+    ])
+
     train_dataset = Cityscapes(
-        args.data_dir, 
-        split="train", 
-        mode="fine", 
-        target_type="semantic", 
-        transforms=transform
+        args.data_dir, split="train", mode="fine", target_type="semantic",
+        transform=image_transform, target_transform=target_transform
     )
     valid_dataset = Cityscapes(
-        args.data_dir, 
-        split="val", 
-        mode="fine", 
-        target_type="semantic", 
-        transforms=transform
+        args.data_dir, split="val", mode="fine", target_type="semantic",
+        transform=image_transform, target_transform=target_transform
     )
+    ##### new version #####
+    ############## i made changes ##############
 
     train_dataloader = DataLoader(
         train_dataset, 
