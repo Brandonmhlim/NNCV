@@ -25,16 +25,14 @@ class Model(nn.Module):
         """
         
         super().__init__()
-        ############## i made changes ##############
-        self.in_channels = in_channels   # i added theis 
-        ############## i made changes ##############
 
         # Encoding path
+        self.in_channels = in_channels
         self.inc = (DoubleConv(in_channels, 64))
-        self.down1 = (Down(64, 128))
-        self.down2 = (Down(128, 256))
-        self.down3 = (Down(256, 512))
-        self.down4 = (Down(512, 512))
+        self.down1 = (ResidualDown(64, 128))
+        self.down2 = (ResidualDown(128, 256))
+        self.down3 = (ResidualDown(256, 512))
+        self.down4 = (ResidualDown(512, 512))
 
         # Decoding path
         self.up1 = (Up(1024, 256))
@@ -51,19 +49,15 @@ class Model(nn.Module):
             x (torch.Tensor): Input tensor of shape (batch_size, in_channels, height, width).
         """
         # Check if the input tensor has the expected number of channels
-        ############## i made changes ##############
+        if x.shape[1] != self.in_channels:
+            raise ValueError(f"Expected {self.in_channels} input channels, but got {x.shape[1]}")
         
-        #if x.shape[1] != self.inc[0].in_channels:
-        if x.shape[1] != self.in_channels:   # <-- change
-             
-        ############## i made changes ##############
-            raise ValueError(f"Expected {self.inc[0].in_channels} input channels, but got {x.shape[1]}")
         # Encoding path
         x1 = self.inc(x)
-        x2 = self.down1(x1)
-        x3 = self.down2(x2)
-        x4 = self.down3(x3)
-        x5 = self.down4(x4)
+        x2 = self.down1(x1) # here needs residual connection
+        x3 = self.down2(x2) # here needs residual connection
+        x4 = self.down3(x3) # here needs residual connection
+        x5 = self.down4(x4) # here needs residual connection 
 
         # Decoding path
         x = self.up1(x5, x4)
@@ -107,6 +101,31 @@ class Down(nn.Module):
 
     def forward(self, x):
         return self.maxpool_conv(x)
+    
+class ResidualDown(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.pool = nn.MaxPool2d(2)
+        
+        self.double_conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias = False),
+            nn.BatchNorm2d(out_channels),
+        )
+        
+        self.shortcut = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False) # this is the connection that will be added later 
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        x = self.pool(x)
+        shortcut = self.shortcut(x) # after the result of the pooled input
+        x = self.double_conv(x) # do the double conv
+        x = x + shortcut # add the result after the two conv 
+        x = self.relu(x)
+        return x 
+        
 
 
 class Up(nn.Module):
@@ -121,6 +140,31 @@ class Up(nn.Module):
         x1 = self.up(x1)
         x = torch.cat([x2, x1], dim=1)
         return self.conv(x)
+    
+class ResidualUp(nn.Module):
+
+    def __init__(self, in_channels, out_channels, bilinear=True):
+        super().__init__()
+        self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        
+        self.double_conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+        )
+        self.shortcut = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False) # this is the connection that will be added later
+        self.relu = nn.ReLU(inplace=True)
+        
+    def forward(self, x1, x2):
+        x1 = self.up(x1) # decoder
+        x = torch.cat([x2, x1], dim=1) # add in the encoder skip connection 
+        shortcut = self.shortcut(x) # after the result of the concatenated input
+        x = self.double_conv(x) # do the double conv 
+        x = x + shortcut # add the result after the two conv 
+        x = self.relu(x)
+        return x
 
 
 class OutConv(nn.Module):
