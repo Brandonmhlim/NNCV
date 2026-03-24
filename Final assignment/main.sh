@@ -1,6 +1,6 @@
 wandb login
 
-python3 train.py \
+python3 train_data_augmentation.py \
     --data-dir ./data/cityscapes \
     --batch-size 64 \
     --epochs 100 \

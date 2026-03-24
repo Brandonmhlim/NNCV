@@ -22,6 +22,9 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from torchvision.datasets import Cityscapes
 from torchvision.utils import make_grid
+from torchvision.transforms.v2 import RandomResizedCrop
+from torchvision.transforms import functional as TF
+from torchvision.transforms.v2 import ColorJitter
 from torchvision.transforms.v2 import (
     Compose,
     Normalize,
@@ -30,7 +33,7 @@ from torchvision.transforms.v2 import (
     ToDtype,
     InterpolationMode
 )
-
+from torch.utils.data import Dataset
 from model import Model
 
 
@@ -69,7 +72,84 @@ def get_args_parser():
 
     return parser
 
+class AugmentedDataset(Dataset):
+    
+    # This class is used in the Dataloader dataset argument. When asked for a sample from the dataset, it will fetch the raw sample from base_dataset and may or may not call other transforms/functions and return the processed sample.
 
+    def __init__(
+        self,
+        base_dataset,
+        joint_transform=None,
+        image_only_transform=None,
+        img_transform=None,
+        target_transform=None,
+    ):
+        self.base_dataset = base_dataset
+        self.joint_transform = joint_transform
+        self.image_only_transform = image_only_transform
+        self.img_transform = img_transform
+        self.target_transform = target_transform
+    
+    def __len__(self):
+        return len(self.base_dataset)
+    
+    def __getitem__(self, idx):
+        
+        image, gt = self.base_dataset[idx]
+        
+        if self.joint_transform is not None:
+            image, gt = self.joint_transform(image, gt)
+        if self.image_only_transform is not None:
+            image = self.image_only_transform(image)
+        if self.img_transform is not None:
+            image = self.img_transform(image)
+        if self.target_transform is not None:
+            gt = self.target_transform(gt)
+        return image, gt  
+
+class JointTransform:
+    
+    def __init__(self):
+        self.p_to_augment = 0.5
+        self.p_augmentation = 0.5
+        self.crop_scale = (0.3, 1.0)
+        self.crop_ratio = (0.9, 1.1)
+        self.output_size = (256, 256)
+    
+    def __call__(self, image, gt):
+        # should this sample be augmented?
+        if torch.rand(1).item() < self.p_to_augment: # generates a 
+            # if the random number generator produces a number under the set threshold, augment
+            if torch.rand(1).item() < self.p_augmentation: # if the random number generator produces a number under the set threshold, apply the augmentation
+                # random crop params
+                i,j,h,w = RandomResizedCrop.get_params(
+                    image,
+                    scale=self.crop_scale,
+                    ratio=self.crop_ratio
+                )
+                # use the same params to crop both the image and the GT
+                image = TF.resized_crop(image, i, j, h, w, size = self.output_size, interpolation = InterpolationMode.BILINEAR)
+                gt = TF.resized_crop(gt, i, j, h, w, size = self.output_size, interpolation = InterpolationMode.NEAREST)
+            if torch.rand(1).item() < self.p_augmentation:
+                # random horizontal flip
+                image = TF.hflip(image)
+                gt = TF.hflip(gt)
+        return image, gt
+    
+class ImageOnlyTransform: 
+    def __init__(self):
+        self.p_augmentation = 0.5
+        self.color_jitter = ColorJitter(
+            brightness=0.2,
+            contrast=0.2,
+            saturation=0.2,
+            hue=0.05
+        )
+    def __call__(self, image):
+        if torch.rand(1).item() < self.p_augmentation:
+            image = self.color_jitter(image)
+        return image
+        
 def main(args):
     # Initialize wandb for logging
     wandb.init(
@@ -81,7 +161,7 @@ def main(args):
     # Create output directory if it doesn't exist
     output_dir = os.path.join("checkpoints", args.experiment_id)
     os.makedirs(output_dir, exist_ok=True)
-
+    
     # Set seed for reproducability
     # If you add other sources of randomness (NumPy, Random), 
     # make sure to set their seeds as well
@@ -107,26 +187,45 @@ def main(args):
     ])
 
     # Load the dataset and make a split for training and validation
-    train_dataset = Cityscapes(
+    train_base_dataset = Cityscapes(
     args.data_dir,
     split="train",
     mode="fine",
     target_type="semantic",
-    transform=img_transform,
-    target_transform=target_transform,
+    transform=None,
+    target_transform=None,
     )
 
-    valid_dataset = Cityscapes(
+    valid_base_dataset = Cityscapes(
         args.data_dir,
         split="val",
         mode="fine",
         target_type="semantic",
-        transform=img_transform,
-        target_transform=target_transform,
+        transform=None,
+        target_transform=None,
     )
-
-    train_dataloader = DataLoader(
-        train_dataset, 
+    
+    joint_train_transform = JointTransform()
+    image_only_train_transform = ImageOnlyTransform()
+    
+    train_dataset = AugmentedDataset(
+        base_dataset = train_base_dataset, 
+        joint_transform = joint_train_transform, # transforms that must be applied to both GT and image 
+        image_only_transform = image_only_train_transform, # appearance changes, that only affect input image, not the GT 
+        img_transform = img_transform, # deterministic transforms, no probability involved
+        target_transform = target_transform, # deterministic transforms, no probability involved
+    )
+    
+    valid_dataset = AugmentedDataset(
+        base_dataset = valid_base_dataset, 
+        joint_transform = None,
+        image_only_transform = None, 
+        img_transform = img_transform, 
+        target_transform = target_transform,
+    )
+    
+    train_dataloader = DataLoader( 
+        train_dataset,  # dataloader dataset argument will be used to fetch samples during training and make batches out of them
         batch_size=args.batch_size, 
         shuffle=True,
         num_workers=args.num_workers
