@@ -34,7 +34,7 @@ from torchvision.transforms.v2 import (
     InterpolationMode
 )
 from torch.utils.data import Dataset
-from model import Model
+from Segformer import Model
 
 
 # Mapping class IDs to train IDs
@@ -114,7 +114,7 @@ class JointTransform:
         self.p_augmentation = 0.5
         self.crop_scale = (0.3, 1.0)
         self.crop_ratio = (0.9, 1.1)
-        self.output_size = (256, 256)
+        self.output_size = (512, 1024)
     
     def __call__(self, image, gt):
         # should this sample be augmented?
@@ -174,7 +174,7 @@ def main(args):
     # Define the transforms to apply to the data
     img_transform = Compose([
     ToImage(),
-    Resize((256, 256)),
+    Resize((512, 1024)),
     ToDtype(torch.float32, scale=True),
     Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
     ])
@@ -182,7 +182,7 @@ def main(args):
     # Target transform (mask)
     target_transform = Compose([
         ToImage(),
-        Resize((256, 256), interpolation=InterpolationMode.NEAREST),
+        Resize((512, 1024), interpolation=InterpolationMode.NEAREST),
         ToDtype(torch.int64),  # no scaling
     ])
 
@@ -238,21 +238,19 @@ def main(args):
     )
 
     # Define the model
-    model = Model(
-        in_channels=3,  # RGB images
-        n_classes=19,  # 19 classes in the Cityscapes dataset
-    ).to(device)
+    model = Model().to(device)
 
     # Define the loss function
     criterion = nn.CrossEntropyLoss(ignore_index=255)  # Ignore the void class
 
     # Define the optimizer
     optimizer = AdamW(model.parameters(), lr=args.lr)
-    #schedule = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.95)
+    schedule = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.95)
 
     # Training loop
     best_valid_loss = float('inf')
     current_best_model_path = None
+
     for epoch in range(args.epochs):
         print(f"Epoch {epoch+1:04}/{args.epochs:04}")
 
@@ -267,6 +265,18 @@ def main(args):
 
             optimizer.zero_grad()
             outputs = model(images)
+            
+            if epoch == 0 and i == 0:
+                print("images:", images.shape)
+                print("labels:", labels.shape)
+                print("raw outputs:", outputs.shape)
+            
+            outputs = torch.nn.functional.interpolate(
+                outputs,
+                size=labels.shape[-2:],
+                mode="bilinear",
+                align_corners=False
+            )
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -277,7 +287,7 @@ def main(args):
                 "epoch": epoch + 1,
             }, step=epoch * len(train_dataloader) + i)
             
-        #schedule.step()
+        schedule.step()
             
         # Validation
         model.eval()
@@ -291,6 +301,13 @@ def main(args):
                 labels = labels.long().squeeze(1)  # Remove channel dimension
 
                 outputs = model(images)
+                outputs = torch.nn.functional.interpolate(
+                    outputs,
+                    size=labels.shape[-2:],
+                    mode="bilinear",
+                    align_corners=False
+                )
+
                 loss = criterion(outputs, labels)
                 losses.append(loss.item())
             

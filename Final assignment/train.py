@@ -98,7 +98,7 @@ def main(args):
     ToDtype(torch.float32, scale=True),
     Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
     ])
-    
+        
     # Target transform (mask)
     target_transform = Compose([
         ToImage(),
