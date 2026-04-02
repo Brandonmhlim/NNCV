@@ -22,7 +22,7 @@ from torchvision.transforms.v2 import (
     InterpolationMode,
 )
 
-from model import Model
+from Segformer import Model
 
 # Fixed paths inside participant container
 # Do NOT chnage the paths, these are fixed locations where the server will 
