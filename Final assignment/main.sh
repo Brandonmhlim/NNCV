@@ -19,7 +19,7 @@ elif [ "$MODEL_TYPE" = "unet" ]; then
     echo "Training UNet model with data augmentation..."
     python3 unified_train.py \
         --data-dir ./data/cityscapes \
-        --batch-size 32 \
+        --batch-size 16 \
         --epochs 50 \
         --lr 1e-4 \
         --num-workers 12 \

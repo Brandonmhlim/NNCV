@@ -31,7 +31,7 @@ OUTPUT_DIR = "/output"
 MODEL_PATH = "/app/model.pt"
 
 local_benchmark_dir = Path("/cityscape-adverse")
-print(f"Found /cityscape-adverse: {LOCAL_BENCHMARK_DIR.exists()}")
+print(f"Found /cityscape-adverse: {local_benchmark_dir.exists()}")
 
 from config import MODEL_TYPE
 
@@ -54,7 +54,7 @@ def preprocess(img: Image.Image) -> torch.Tensor:
     # Return a tensor suitable for model input
     transform = Compose([
         ToImage(),
-        Resize(size=(512, 1024), interpolation=InterpolationMode.BILINEAR),
+        Resize(size=(512, 512), interpolation=InterpolationMode.BILINEAR),
         ToDtype(dtype=torch.float32, scale=True),
         Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
     ])

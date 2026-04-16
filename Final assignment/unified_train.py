@@ -120,7 +120,7 @@ class JointTransform:
         self.p_augmentation = 0.5
         self.crop_scale = (0.3, 1.0)
         self.crop_ratio = (0.9, 1.1)
-        self.output_size = (512, 1024)
+        self.output_size = (512, 512)
     
     def __call__(self, image, gt):
         # should this sample be augmented?
@@ -180,7 +180,7 @@ def main(args):
     # Define the transforms to apply to the data
     img_transform = Compose([
     ToImage(),
-    Resize((512, 1024)),
+    Resize((512, 512)),
     ToDtype(torch.float32, scale=True),
     Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
     ])
@@ -188,7 +188,7 @@ def main(args):
     # Target transform (mask)
     target_transform = Compose([
         ToImage(),
-        Resize((512, 1024), interpolation=InterpolationMode.NEAREST),
+        Resize((512, 512), interpolation=InterpolationMode.NEAREST),
         ToDtype(torch.int64),  # no scaling
     ])
 
@@ -253,7 +253,7 @@ def main(args):
     0.0403555, 0.01279246, 0.00128304, 0.07264924, 0.00290989,
     0.00247957, 0.00211601, 0.0008914, 0.00441797
     ])
-    weights = 1.0 / (class_percentages + 1e-8)
+    weights = 1.0 / np.log(class_percentages + 1e-8)
     weights = weights / weights.mean()
     criterion = nn.CrossEntropyLoss(weight=torch.tensor(weights, dtype=torch.float32).to(device), ignore_index=255)  # Ignore the void class
 
