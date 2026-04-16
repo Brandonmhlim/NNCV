@@ -22,8 +22,6 @@ from torchvision.transforms.v2 import (
     InterpolationMode,
 )
 
-from Segformer import Model
-
 # Fixed paths inside participant container
 # Do NOT chnage the paths, these are fixed locations where the server will 
 # provide input data and expect output data.
@@ -32,6 +30,23 @@ IMAGE_DIR = "/data"
 OUTPUT_DIR = "/output"
 MODEL_PATH = "/app/model.pt"
 
+local_benchmark_dir = Path("/cityscape-adverse")
+print(f"Found /cityscape-adverse: {LOCAL_BENCHMARK_DIR.exists()}")
+
+from config import MODEL_TYPE
+
+def build_model(): 
+    if MODEL_TYPE == "segformer":
+        from Segformer import Model
+        print("SEGFORMER LOADINGGG")
+        return Model()
+    elif MODEL_TYPE == "unet":
+        from UNet import Model
+        print("UNET LOADINGGG")
+        return Model()
+    else:
+        raise ValueError(f"Unsupported model type: {MODEL_TYPE}")
+
 
 def preprocess(img: Image.Image) -> torch.Tensor:
     # Implement your preprocessing steps here
@@ -39,9 +54,9 @@ def preprocess(img: Image.Image) -> torch.Tensor:
     # Return a tensor suitable for model input
     transform = Compose([
         ToImage(),
-        Resize(size=(256, 256), interpolation=InterpolationMode.BILINEAR),
+        Resize(size=(512, 1024), interpolation=InterpolationMode.BILINEAR),
         ToDtype(dtype=torch.float32, scale=True),
-        Normalize(mean=(0.5,), std=(0.5,)),
+        Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
     ])
 
     img = transform(img)
@@ -67,7 +82,8 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Load model
-    model = Model()
+    model = build_model()
+    
     state_dict = torch.load(
         MODEL_PATH, 
         map_location=device,

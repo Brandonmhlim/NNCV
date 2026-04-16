@@ -14,7 +14,7 @@ Feel free to customize the script as needed for your use case.
 """
 import os
 from argparse import ArgumentParser
-
+import numpy as np
 import wandb
 import torch
 import torch.nn as nn
@@ -34,8 +34,17 @@ from torchvision.transforms.v2 import (
     InterpolationMode
 )
 from torch.utils.data import Dataset
-from Segformer import Model
 
+from config import MODEL_TYPE
+
+if MODEL_TYPE == "segformer": 
+    from Segformer import Model
+    print("SEGFORMER IMPORTINGGG")
+elif MODEL_TYPE == "unet":
+    from UNet import Model
+    print("UNET IMPORTINGGG")
+else : 
+    raise ValueError("Unsupported model type")
 
 # Mapping class IDs to train IDs
 id_to_trainid = {cls.id: cls.train_id for cls in Cityscapes.classes}
@@ -49,13 +58,10 @@ train_id_to_color[255] = (0, 0, 0)  # Assign black to ignored labels
 def convert_train_id_to_color(prediction: torch.Tensor) -> torch.Tensor:
     batch, _, height, width = prediction.shape
     color_image = torch.zeros((batch, 3, height, width), dtype=torch.uint8)
-
     for train_id, color in train_id_to_color.items():
         mask = prediction[:, 0] == train_id
-
         for i in range(3):
             color_image[:, i][mask] = color[i]
-
     return color_image
 
 
@@ -241,11 +247,19 @@ def main(args):
     model = Model().to(device)
 
     # Define the loss function
-    criterion = nn.CrossEntropyLoss(ignore_index=255)  # Ignore the void class
+    class_percentages = np.array([
+    0.37151414, 0.05920342, 0.23216219, 0.00576399, 0.00866051,
+    0.01298383, 0.00215229, 0.00576169, 0.15061145, 0.0112914,
+    0.0403555, 0.01279246, 0.00128304, 0.07264924, 0.00290989,
+    0.00247957, 0.00211601, 0.0008914, 0.00441797
+    ])
+    weights = 1.0 / (class_percentages + 1e-8)
+    weights = weights / weights.mean()
+    criterion = nn.CrossEntropyLoss(weight=torch.tensor(weights, dtype=torch.float32).to(device), ignore_index=255)  # Ignore the void class
 
     # Define the optimizer
     optimizer = AdamW(model.parameters(), lr=args.lr)
-    schedule = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.95)
+    #schedule = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.95)
 
     # Training loop
     best_valid_loss = float('inf')
@@ -271,12 +285,6 @@ def main(args):
                 print("labels:", labels.shape)
                 print("raw outputs:", outputs.shape)
             
-            outputs = torch.nn.functional.interpolate(
-                outputs,
-                size=labels.shape[-2:],
-                mode="bilinear",
-                align_corners=False
-            )
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -287,7 +295,7 @@ def main(args):
                 "epoch": epoch + 1,
             }, step=epoch * len(train_dataloader) + i)
             
-        schedule.step()
+        #schedule.step()
             
         # Validation
         model.eval()
@@ -301,12 +309,6 @@ def main(args):
                 labels = labels.long().squeeze(1)  # Remove channel dimension
 
                 outputs = model(images)
-                outputs = torch.nn.functional.interpolate(
-                    outputs,
-                    size=labels.shape[-2:],
-                    mode="bilinear",
-                    align_corners=False
-                )
 
                 loss = criterion(outputs, labels)
                 losses.append(loss.item())

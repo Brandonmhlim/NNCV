@@ -32,7 +32,7 @@ class Model(nn.Module):
         self.down1 = (ResidualDown(64, 128))
         self.down2 = (ResidualDown(128, 256))
         self.down3 = (ResidualDown(256, 512))
-        self.down4 = (ResidualDown(512, 512))
+        self.down4 = (ResidualDown(512, 1024))
 
         # Decoding path, ResidualUp
         #self.up1 = (ResidualUp(1024, 256))
@@ -42,10 +42,10 @@ class Model(nn.Module):
         #self.outc = (OutConv(64, n_classes))
         
         # Decoding path, ResidualUpAttention
-        self.up1 = (ResidualUpAttention(512, 512, 256))
-        self.up2 = (ResidualUpAttention(256, 256, 128))
-        self.up3 = (ResidualUpAttention(128, 128, 64))
-        self.up4 = (ResidualUpAttention(64, 64, 64))
+        self.up1 = (ResidualUpAttention(1024, 512, 512))
+        self.up2 = (ResidualUpAttention(512, 256, 256))
+        self.up3 = (ResidualUpAttention(256, 128, 128))
+        self.up4 = (ResidualUpAttention(128, 64, 64))
         self.outc = (OutConv(64, n_classes))    
         
 
@@ -192,7 +192,7 @@ class AttentionGate(nn.Module):
             nn.BatchNorm2d(inter_channels)
         )
         self.relu = nn.ReLU(inplace=True)
-        self.conv = nn.Conv2d(inter_channels, enc_channels, kernel_size=1, bias=True)
+        self.conv = nn.Conv2d(inter_channels, 1, kernel_size=1, bias=True)
         self.sigmoid = nn.Sigmoid()
         
     def forward(self, enc_map, dec_map):

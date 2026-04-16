@@ -1,10 +1,31 @@
+#!/bin/bash
 wandb login
 
-python3 train_data_augmentation_segformer.py \
-    --data-dir ./data/cityscapes \
-    --batch-size 16 \
-    --epochs 50 \
-    --lr 0.0005 \
-    --num-workers 12 \
-    --seed 42 \
-    --experiment-id "segformer-b1-a100-optimized"
+# read model type, 
+MODEL_TYPE=$(python3 -c "import config; print(config.MODEL_TYPE)")
+MODEL_TYPE=$(echo "$MODEL_TYPE" | tr -cd '[:alnum:]')
+
+if [ "$MODEL_TYPE" = "segformer" ]; then
+    echo "Training SegFormer model with data augmentation..."
+    python3 unified_train.py \
+        --data-dir ./data/cityscapes \
+        --batch-size 16 \
+        --epochs 30 \
+        --lr 1e-4 \
+        --num-workers 12 \
+        --seed 42 \
+        --experiment-id "segformer-b1-a100-optimized"
+elif [ "$MODEL_TYPE" = "unet" ]; then
+    echo "Training UNet model with data augmentation..."
+    python3 unified_train.py \
+        --data-dir ./data/cityscapes \
+        --batch-size 32 \
+        --epochs 50 \
+        --lr 1e-4 \
+        --num-workers 12 \
+        --seed 42 \
+        --experiment-id "unet"
+else
+    echo "Unknown model type: $MODEL_TYPE"
+    exit 1
+fi

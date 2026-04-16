@@ -20,11 +20,17 @@ ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache-dir \
     torch torchvision --index-url https://download.pytorch.org/whl/cu126
 RUN pip install --no-cache-dir \
-    pillow
+    pillow numpy transformers
 
-WORKDIR /app
-COPY predict.py /app/predict.py
-COPY model.py /app/model.py
-COPY model.pt /app/model.pt
+WORKDIR /app    
+COPY config.py .
+COPY predict.py .
+COPY UNet.py .
+COPY Segformer.py .
+COPY model.pt .
+COPY mit-b1 ./mit-b1
 
-ENTRYPOINT ["python", "/app/predict.py"]
+ENV USE_LOCAL_MODEL="True"
+
+
+ENTRYPOINT ["python", "predict.py"]
