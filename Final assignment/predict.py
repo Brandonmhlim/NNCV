@@ -34,7 +34,7 @@ local_benchmark_dir = Path("/cityscape-adverse")
 print(f"Found /cityscape-adverse: {local_benchmark_dir.exists()}")
 
 from config import MODEL_TYPE
-
+#something
 def build_model(): 
     if MODEL_TYPE == "segformer":
         from Segformer import Model
