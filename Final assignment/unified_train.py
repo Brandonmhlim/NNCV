@@ -216,8 +216,8 @@ def main(args):
     
     train_dataset = AugmentedDataset(
         base_dataset = train_base_dataset, 
-        joint_transform = joint_train_transform, # transforms that must be applied to both GT and image 
-        image_only_transform = image_only_train_transform, # appearance changes, that only affect input image, not the GT 
+        joint_transform = None,#joint_train_transform, # transforms that must be applied to both GT and image 
+        image_only_transform = None,#image_only_train_transform, # appearance changes, that only affect input image, not the GT 
         img_transform = img_transform, # deterministic transforms, no probability involved
         target_transform = target_transform, # deterministic transforms, no probability involved
     )

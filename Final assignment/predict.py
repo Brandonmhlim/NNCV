@@ -8,7 +8,7 @@ the `preprocess` and `postprocess` functions to fit your model's input
 and output requirements.
 """
 from pathlib import Path
-
+import random
 import torch
 import torch.nn as nn
 import numpy as np
@@ -21,6 +21,11 @@ from torchvision.transforms.v2 import (
     Normalize,
     InterpolationMode,
 )
+from config import MODEL_TYPE
+from tqdm import tqdm
+
+
+BATCH_SIZE = 4
 
 # Fixed paths inside participant container
 # Do NOT chnage the paths, these are fixed locations where the server will 
@@ -33,8 +38,19 @@ MODEL_PATH = "/app/model.pt"
 local_benchmark_dir = Path("/cityscape-adverse")
 print(f"Found /cityscape-adverse: {local_benchmark_dir.exists()}")
 
-from config import MODEL_TYPE
-#something
+#### Information about the dataset ####
+num_classes = 19
+ignore_index = 255
+weather_folders = ["autumn", "dawn", "foggy", "night", "rainy", "snow", "spring", "sunny"] # skip "original"
+class_names = [
+    "road", "sidewalk", "building", "wall", "fence", "pole", "traffic light", 
+    "traffic sign", "vegetation", "terrain", "sky", "person", "rider", 
+    "car", "truck", "bus", "train", "motorcycle", "bicycle"
+]
+city_names = ["frankfurt", "lindau", "munster"]
+
+labelpixel_to_id = {7:0, 8:1, 11:2, 12:3, 13:4, 17:5, 19:6, 20:7, 21:8, 22:9, 23:10, 24:11, 25:12, 26:13, 27:14, 28:15, 31:16, 32:17, 33:18}
+
 def build_model(): 
     if MODEL_TYPE == "segformer":
         from Segformer import Model
@@ -77,6 +93,35 @@ def postprocess(pred: torch.Tensor, original_shape: tuple) -> np.ndarray:
 
     return prediction_numpy
 
+def match_label_to_id(gt):
+    gt_mapped = np.full_like(gt, fill_value=ignore_index)  # Initialize with ignore_index
+    for label_pixel, id in labelpixel_to_id.items():
+        gt_mapped[gt == label_pixel] = id
+    return gt_mapped
+
+def compute_per_image_class_iou(prediction, gt):
+    validity_mask = (gt != ignore_index)
+    prediction_valid = prediction[validity_mask]
+    gt_valid = gt[validity_mask]
+    
+    ious_per_class = {}
+    
+    for class_id in range(19):  # For each class
+        pred_class = (prediction_valid == class_id)
+        gt_class = (gt_valid == class_id)
+
+        intersection = np.sum(pred_class & gt_class)
+        union = np.sum(pred_class) + np.sum(gt_class) - intersection
+
+        if union == 0:
+            ious_per_class[class_id] = np.nan
+        else:
+            ious_per_class[class_id] = intersection / union
+        
+    valid_ious = [iou for iou in ious_per_class.values() if not np.isnan(iou)]
+    miou = np.mean(valid_ious) if len(valid_ious) > 0 else np.nan
+        
+    return ious_per_class, miou
 
 def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -118,7 +163,80 @@ def main():
 
             # Save predicted mask
             Image.fromarray(seg_pred.astype(np.uint8)).save(out_path)
+            
+        print("Checking whether local benchmark dir exists")
+        if local_benchmark_dir.exists():
+            print("found local benchmark dir, running mIoU evaluation")
+            weather_mious = {w: [] for w in weather_folders}
 
+            with torch.no_grad():
+                for weather in tqdm(weather_folders, desc="Weather", ncols=80):
+                    weather_dir = local_benchmark_dir / "val" / weather
+                    print(f"going into weather condition: {weather}")
+                    if not weather_dir.exists():
+                        print(f"bomboclaat, weather {weather_dir} aint there bruv")
+                        continue
 
+                    for city in city_names:
+                        city_dir = weather_dir / city
+                        print(f"Processing city: {city}")
+                        if not city_dir.exists():
+                            print("bomboclaat, city dir aint there bruv:", city_dir)
+                            continue
+
+                        img_paths = list(city_dir.glob("*.png"))
+                        if not img_paths:
+                            print("bomboclaat, no images found for city dir:", city_dir)
+                            continue
+
+                        # sample 10 random images per city
+                        if len(img_paths) > 10:
+                            img_paths = random.sample(img_paths, 10)
+
+                        # batch inference
+                        for i in range(0, len(img_paths), BATCH_SIZE):
+                            chunk = img_paths[i:i+BATCH_SIZE]
+                            batch = []
+                            img_names = []
+
+                            for img_path in chunk:
+                                print(f"Processing image: {img_path.name}")
+                                img = Image.open(img_path).convert("RGB")
+                                original_shape = (1024, 2048)
+
+                                # correct stem extraction
+                                img_names.append(img_path.stem.replace("_leftImg8bit", ""))
+
+                                batch.append(preprocess(img).squeeze(0))
+
+                            batch_tensor = torch.stack(batch).to(device)
+                            predictions = model(batch_tensor)
+                            print("Batch done")
+
+                            for prediction, img_name in zip(predictions, img_names):
+                                print(f"Postprocessing image: {img_name}")
+                                prediction_mask = postprocess(prediction.unsqueeze(0), original_shape)
+
+                                gt_path = local_benchmark_dir / "val_label" / city / f"{img_name}_gtFine_labelIds.png"
+                                if not gt_path.exists():
+                                    print("couldnt find gt for image:", img_name)
+                                    continue
+
+                                gt = np.array(Image.open(gt_path))
+                                gt = match_label_to_id(gt)
+
+                                _, miou = compute_per_image_class_iou(prediction_mask, gt)
+                                weather_mious[weather].append(miou)
+            print("Finished mIoU evaluation, printing results...")
+            for weather, values in weather_mious.items():
+                print("going to print results for weather condition:", weather)
+                if values:
+                    print(weather, np.mean(values))
+                else:
+                    print(weather, "no valid images")
+        else:
+            print("cityscape-adverse not found — skipping local evaluation.")
+
+            
 if __name__ == "__main__":
     main()
