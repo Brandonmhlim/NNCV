@@ -21,7 +21,7 @@ from torchvision.transforms.v2 import (
     Normalize,
     InterpolationMode,
 )
-from config import MODEL_TYPE
+from config import MODEL_TYPE, MODEL_PATH
 from tqdm import tqdm
 
 
@@ -33,7 +33,7 @@ BATCH_SIZE = 4
 # Only for local testing, you can change these paths to point to your local data and output folders.
 IMAGE_DIR = "/data"
 OUTPUT_DIR = "/output"
-MODEL_PATH = "/app/model.pt"
+#MODEL_PATH = "/app/model.pt"
 
 local_benchmark_dir = Path("/cityscape-adverse")
 print(f"Found /cityscape-adverse: {local_benchmark_dir.exists()}")
