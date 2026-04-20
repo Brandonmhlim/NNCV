@@ -1,60 +1,57 @@
-import os
-import numpy as np
-from PIL import Image
+import wandb
+import csv
 
-gt_root = "/home/scur2235/NNCV/Final assignment/data/cityscapes/gtFine/train"
+ENTITY = "m-h-lim-eindhoven-university-of-technology"
+PROJECT = "5lsm0-cityscapes-segmentation"
 
-id_to_trainid = {
-    7: 0,
-    8: 1,
-    11: 2,
-    12: 3,
-    13: 4,
-    17: 5,
-    19: 6,
-    20: 7,
-    21: 8,
-    22: 9,
-    23: 10,
-    24: 11,
-    25: 12,
-    26: 13,
-    27: 14,
-    28: 15,
-    31: 16,
-    32: 17,
-    33: 18,
+RUNS = {
+    "unet_aug": "1gyz7dg8",
+    "segformer_aug": "zvj1iy32",
+    "unet_no_aug": "h3jjev91",
+    "segformer_no_aug": "b9acjaf8",
 }
 
-class_counts = np.zeros(19, dtype=np.int64)
-total_valid_pixels = 0
+api = wandb.Api()
 
-city_folders = os.listdir(gt_root)
-total_cities = len(city_folders)
+for name, run_id in RUNS.items():
+    run = api.run(f"{ENTITY}/{PROJECT}/{run_id}")
+    history = run.history(samples=100000)
 
-for city_idx, city_name in enumerate(city_folders, start=1):
-    city_path = os.path.join(gt_root, city_name)
+    train_losses_by_epoch = {}
+    valid_losses_by_epoch = {}
 
-    image_files = os.listdir(city_path)
-    total_images = len(image_files)
+    for _, row in history.iterrows():
+        epoch = row.get("epoch")
 
-    print(f"[{city_idx}/{total_cities}] Processing city folder: {city_name}")
-
-    for image_idx, file_name in enumerate(image_files, start=1):
-        if not file_name.endswith("_gtFine_labelIds.png"):
+        if epoch is None:
             continue
 
-        print(f"    [{image_idx}/{total_images}] {file_name}")
+        epoch = int(epoch)
 
-        file_path = os.path.join(city_path, file_name)
-        label_np = np.array(Image.open(file_path)).flatten()
+        train_loss = row.get("train_loss")
+        if train_loss == train_loss:  # not NaN
+            if epoch not in train_losses_by_epoch:
+                train_losses_by_epoch[epoch] = []
+            train_losses_by_epoch[epoch].append(float(train_loss))
 
-        for pixel_value in label_np:
-            if pixel_value in id_to_trainid:
-                train_id = id_to_trainid[pixel_value]
-                class_counts[train_id] += 1
-                total_valid_pixels += 1
+        valid_loss = row.get("valid_loss")
+        if valid_loss == valid_loss:  # not NaN
+            valid_losses_by_epoch[epoch] = float(valid_loss)
 
-class_percentages = class_counts / total_valid_pixels
+    all_epochs = sorted(set(train_losses_by_epoch.keys()) | set(valid_losses_by_epoch.keys()))
 
-print(class_percentages)
+    output_file = f"{name}_losses.csv"
+    with open(output_file, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["epoch", "train_loss", "valid_loss"])
+
+        for epoch in all_epochs:
+            if epoch in train_losses_by_epoch:
+                mean_train_loss = sum(train_losses_by_epoch[epoch]) / len(train_losses_by_epoch[epoch])
+            else:
+                mean_train_loss = ""
+
+            valid_loss = valid_losses_by_epoch.get(epoch, "")
+            writer.writerow([epoch, mean_train_loss, valid_loss])
+
+    print(f"saved {output_file}")

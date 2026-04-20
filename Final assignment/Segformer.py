@@ -6,7 +6,7 @@ import torch
 class Model(nn.Module):
     def __init__(self, num_classes=19):
         super().__init__()
-        use_local = os.getenv("USE_LOCAL_MODEL", "False") == "true"
+        use_local = os.getenv("USE_LOCAL_MODEL", "False") == "True"
         
         if use_local:
             model_path ="./mit-b1"

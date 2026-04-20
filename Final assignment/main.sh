@@ -14,7 +14,7 @@ if [ "$MODEL_TYPE" = "segformer" ]; then
         --lr 1e-4 \
         --num-workers 12 \
         --seed 42 \
-        --experiment-id "segformer-b1-a100-optimized(no augmentation)"
+        --experiment-id "segformer"
 elif [ "$MODEL_TYPE" = "unet" ]; then
     echo "Training UNet model with data augmentation..."
     python3 unified_train.py \
@@ -24,7 +24,7 @@ elif [ "$MODEL_TYPE" = "unet" ]; then
         --lr 1e-4 \
         --num-workers 12 \
         --seed 42 \
-        --experiment-id "unet(no augmentation)"
+        --experiment-id "unet"
 else
     echo "Unknown model type: $MODEL_TYPE"
     exit 1

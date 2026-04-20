@@ -116,35 +116,39 @@ class AugmentedDataset(Dataset):
 class JointTransform:
     
     def __init__(self):
-        self.p_to_augment = 0.5
-        self.p_augmentation = 0.5
+        self.p_crop = 0.5
+        self.p_flip = 0.5
         self.crop_scale = (0.3, 1.0)
         self.crop_ratio = (0.9, 1.1)
         self.output_size = (512, 512)
     
     def __call__(self, image, gt):
-        # should this sample be augmented?
-        if torch.rand(1).item() < self.p_to_augment: # generates a 
-            # if the random number generator produces a number under the set threshold, augment
-            if torch.rand(1).item() < self.p_augmentation: # if the random number generator produces a number under the set threshold, apply the augmentation
-                # random crop params
-                i,j,h,w = RandomResizedCrop.get_params(
-                    image,
-                    scale=self.crop_scale,
-                    ratio=self.crop_ratio
-                )
-                # use the same params to crop both the image and the GT
-                image = TF.resized_crop(image, i, j, h, w, size = self.output_size, interpolation = InterpolationMode.BILINEAR)
-                gt = TF.resized_crop(gt, i, j, h, w, size = self.output_size, interpolation = InterpolationMode.NEAREST)
-            if torch.rand(1).item() < self.p_augmentation:
-                # random horizontal flip
-                image = TF.hflip(image)
-                gt = TF.hflip(gt)
+        if torch.rand(1).item() < self.p_crop: # if the random number is less than the crop probability, we do a random resized crop, otherwise we keep the original image
+            i, j, h, w = RandomResizedCrop.get_params(
+                image,
+                scale=self.crop_scale,
+                ratio=self.crop_ratio
+            )
+            image = TF.resized_crop( # crop the image and GT in the same way
+                image, i, j, h, w,
+                size=self.output_size,
+                interpolation=InterpolationMode.BILINEAR
+            )
+            gt = TF.resized_crop(
+                gt, i, j, h, w,
+                size=self.output_size,
+                interpolation=InterpolationMode.NEAREST
+            )
+
+        if torch.rand(1).item() < self.p_flip: # if the random number is less than the flip probability, do a horizontal flip
+            image = TF.hflip(image)
+            gt = TF.hflip(gt)
+
         return image, gt
     
 class ImageOnlyTransform: 
     def __init__(self):
-        self.p_augmentation = 0.5
+        self.p_colorjitter = 0.5
         self.color_jitter = ColorJitter(
             brightness=0.2,
             contrast=0.2,
@@ -152,7 +156,7 @@ class ImageOnlyTransform:
             hue=0.05
         )
     def __call__(self, image):
-        if torch.rand(1).item() < self.p_augmentation:
+        if torch.rand(1).item() < self.p_colorjitter:
             image = self.color_jitter(image)
         return image
         
@@ -216,8 +220,8 @@ def main(args):
     
     train_dataset = AugmentedDataset(
         base_dataset = train_base_dataset, 
-        joint_transform = None,#joint_train_transform, # transforms that must be applied to both GT and image 
-        image_only_transform = None,#image_only_train_transform, # appearance changes, that only affect input image, not the GT 
+        joint_transform = joint_train_transform,#joint_train_transform, # transforms that must be applied to both GT and image 
+        image_only_transform = image_only_train_transform,#image_only_train_transform, # appearance changes, that only affect input image, not the GT 
         img_transform = img_transform, # deterministic transforms, no probability involved
         target_transform = target_transform, # deterministic transforms, no probability involved
     )

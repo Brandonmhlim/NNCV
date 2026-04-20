@@ -27,7 +27,10 @@ COPY config.py .
 COPY predict.py .
 COPY UNet.py .
 COPY Segformer.py .
-COPY model.pt .
+COPY model_segformer_w_aug.pt .
+COPY model_segformer.pt .
+COPY model_unet_w_aug.pt .
+COPY model_unet.pt .
 COPY mit-b1 ./mit-b1
 
 ENV USE_LOCAL_MODEL="True"
