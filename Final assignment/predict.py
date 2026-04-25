@@ -24,7 +24,8 @@ from torchvision.transforms.v2 import (
 from config import MODEL_TYPE, MODEL_PATH
 from tqdm import tqdm
 
-BATCH_SIZE = 4
+print(torch.cuda.is_available())
+print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "No CUDA GPU")
 
 # Fixed paths inside participant container
 # Do NOT chnage the paths, these are fixed locations where the server will 
@@ -40,7 +41,7 @@ print(f"Found /cityscape-adverse: {local_benchmark_dir.exists()}")
 #### Information about the dataset ####
 num_classes = 19
 ignore_index = 255
-weather_folders = ["autumn", "dawn", "foggy", "night", "rainy", "snow", "spring", "sunny", "original"] # skip "original"
+weather_folders = ["autumn", "dawn", "foggy", "night", "rainy", "snow", "spring", "sunny", "original"] 
 class_names = [
     "road", "sidewalk", "building", "wall", "fence", "pole", "traffic light", 
     "traffic sign", "vegetation", "terrain", "sky", "person", "rider", 
@@ -99,28 +100,25 @@ def match_label_to_id(gt):
     return gt_mapped
 
 def compute_per_image_class_iou(prediction, gt):
-    validity_mask = (gt != ignore_index)
-    prediction_valid = prediction[validity_mask]
-    gt_valid = gt[validity_mask]
+    validity_mask = (gt != ignore_index) # for all pixels who are not the ignore index
+    prediction_valid = prediction[validity_mask] # apply mask 
+    gt_valid = gt[validity_mask] # apply mask
     
-    ious_per_class = {}
+    ious_per_class = {} # dictionary to save iou values per class 
     
     for class_id in range(19):  # For each class
-        pred_class = (prediction_valid == class_id)
-        gt_class = (gt_valid == class_id)
+        pred_class = (prediction_valid == class_id) # look only at pixels for who the class is the one we're inspecting
+        gt_class = (gt_valid == class_id) # same for gt
 
-        intersection = np.sum(pred_class & gt_class)
-        union = np.sum(pred_class) + np.sum(gt_class) - intersection
+        intersection = np.sum(pred_class & gt_class) # compute intersection
+        union = np.sum(pred_class) + np.sum(gt_class) - intersection # compute union
 
-        if union == 0:
+        if union == 0: # safe guard
             ious_per_class[class_id] = np.nan
         else:
             ious_per_class[class_id] = intersection / union
-        
-    valid_ious = [iou for iou in ious_per_class.values() if not np.isnan(iou)]
-    miou = np.mean(valid_ious) if len(valid_ious) > 0 else np.nan
-        
-    return ious_per_class, miou
+
+    return ious_per_class
 
 def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -167,94 +165,100 @@ def main():
         print("Checking whether local benchmark dir exists")
         if local_benchmark_dir.exists():
             print("found local benchmark dir, running mIoU evaluation")
-            weather_mious = {w: [] for w in weather_folders}
-
-            total_img = 0
+            weather_ious = {} # dictionary to store iou values per weather condition per image, per class. Format 
+            for w in weather_folders:
+                weather_ious[w] = [] # initialize empty list for each weather condition.
+            
+            total_img = 0 # image nr counter 
             with torch.no_grad():
                 for weather in tqdm(weather_folders, desc="Weather", ncols=80):
-                    weather_dir = local_benchmark_dir / "val" / weather
-                    print(f"going into weather condition: {weather}")
-                    if not weather_dir.exists():
-                        print(f"bomboclaat, weather {weather_dir} aint there bruv")
-                        continue
-
-                    for city in city_names:
-                        city_dir = weather_dir / city
+                    weather_dir = local_benchmark_dir / "val" / weather # find the corresponding folder
+                    print(f"going into weather condition: {weather}") # found folder
+                    #if not weather_dir.exists():
+                    #   print(f"bomboclaat, weather {weather_dir} aint there bruv")
+                    #    continue
+                    for city in city_names: # per city 
+                        city_dir = weather_dir / city # find city folder
                         print(f"Processing city: {city}")
-                        if not city_dir.exists():
-                            print("bomboclaat, city dir aint there bruv:", city_dir)
-                            continue
-
-                        img_paths = list(city_dir.glob("*.png"))
-                        if not img_paths:
-                            print("bomboclaat, no images found for city dir:", city_dir)
-                            continue
+                        #if not city_dir.exists():
+                        #    print("bomboclaat, city dir aint there bruv:", city_dir)
+                        #    continue
+                        img_paths = list(city_dir.glob("*.png")) # this gives a list of png image in the city folder
+                        #if not img_paths:
+                        #    print("bomboclaat, no images found for city dir:", city_dir)
+                        #    continue
 
                         # sample 20 random images per city
                         if len(img_paths) > 20:
                             img_paths = random.sample(img_paths, 20)
-
+                        # update image counter
                         total_img += len(img_paths)
-                        
-                        # batch inference
-                        for i in range(0, len(img_paths), BATCH_SIZE):
-                            chunk = img_paths[i:i+BATCH_SIZE]
-                            batch = []
-                            img_names = []
+                        print(f"Processing {len(img_paths)} images in {city}")  
 
-                            for img_path in chunk:
-                                print(f"Processing image: {img_path.name}")
-                                img = Image.open(img_path).convert("RGB")
-                                original_shape = (1024, 2048)
+                        for img_path in img_paths:
+                            print(f"Processing image: {img_path.name}")
 
-                                # correct stem extraction
-                                img_names.append(img_path.stem.replace("_leftImg8bit", ""))
+                            img = Image.open(img_path)#.convert("RGB")
+                            original_shape = (1024, 2048)
 
-                                batch.append(preprocess(img).squeeze(0))
+                            img_name = img_path.stem.replace("_leftImg8bit", "")
 
-                            batch_tensor = torch.stack(batch).to(device)
-                            predictions = model(batch_tensor)
-                            print("Batch done")
+                            input_tensor = preprocess(img).to(device)
 
-                            for prediction, img_name in zip(predictions, img_names):
-                                print(f"Postprocessing image: {img_name}")
-                                prediction_mask = postprocess(prediction.unsqueeze(0), original_shape)
+                            prediction = model(input_tensor)
 
-                                gt_path = local_benchmark_dir / "val_label" / city / f"{img_name}_gtFine_labelIds.png"
-                                if not gt_path.exists():
-                                    print("couldnt find gt for image:", img_name)
-                                    continue
+                            print("Image done")
 
-                                gt = np.array(Image.open(gt_path))
-                                gt = match_label_to_id(gt)
+                            # prediction is obtained, now compare to gt
+                            print(f"Postprocessing image: {img_name}")
+                            prediction_mask = postprocess(prediction, original_shape)
 
-                                ious_per_class, miou = compute_per_image_class_iou(prediction_mask, gt)
-                                weather_mious[weather].append(ious_per_class)
-            print("Finished mIoU evaluation, saving results...")
+                            # find the corresponding gt
+                            gt_path = local_benchmark_dir / "val_label" / city / f"{img_name}_gtFine_labelIds.png"
+
+                            #if not gt_path.exists():
+                            #    print("couldnt find gt for image:", img_name)
+                            #    continue
+
+                            gt = np.array(Image.open(gt_path))
+
+                            # map the pixel values
+                            gt = match_label_to_id(gt)
+
+                            ious_per_class = compute_per_image_class_iou(prediction_mask, gt)
+
+                            weather_ious[weather].append(ious_per_class)
+            print("Finished IoU evaluations for all weather conditions, saving results......")
             
             ######## added ########
             print("Per‑weather per‑class mIoU")
 
             for weather in weather_folders: # goes through each weather condition
-                class_iou_lists = weather_mious.get(weather, []) # these are the iou values per image for the given weather condition, per class
+                class_iou_lists = weather_ious.get(weather, []) # each entry is a weather condition. Each entry in that weather condition is an image. Each entry in that image is a class iou
 
                 # accumulate per-class IoUs
-                per_class_values = {cid: [] for cid in range(num_classes)} # creates dictionary. To collect all iou values of class 0, 1, 2,3,...18 across all images of the given weather condition. So we will have 19 lists, each containing the iou values of that class across all images of the given weather condition.
+                per_class_values = {} 
+                
+                for class_id in range(19):
+                    per_class_values[class_id] = [] # initialize empty list for each class id
 
                 for img_iou_dict in class_iou_lists: # per image iou dict for some weather condition
-                    for cid, val in img_iou_dict.items(): # per class iou value for the given image
-                        if not np.isnan(val): # only consider valid iou values (ignore nans) 
-                            per_class_values[cid].append(val) # add the iou value to the list of that class.
+                    for class_id, class_iou in img_iou_dict.items(): # per class iou value for the given image
+                        if not np.isnan(class_iou): # only consider valid iou values (ignore nans) 
+                            per_class_values[class_id].append(class_iou) # add the iou value to the list of that class.
 
                 # once we have all iou values for each class across all images of the given weather condition, we can compute the mean iou for each class. This will give us a single mIoU value per class for that weather condition.
-                mean_per_class = {
-                    cid: (np.mean(vals) if len(vals) > 0 else np.nan)
-                    for cid, vals in per_class_values.items()
-                }
+                mean_per_class = {}
+                
+                for class_id, class_iou in per_class_values.items():
+                    if len(class_iou) > 0:
+                        mean_per_class[class_id] = np.mean(class_iou) # compute mean iou for the class
+                    else:
+                        mean_per_class[class_id] = np.nan # if there are no valid iou values for the class, set it to nan
 
                 print(f"{weather}")
-                for cid, miou in mean_per_class.items():
-                    cname = class_names[cid]
+                for class_id, miou in mean_per_class.items():
+                    cname = class_names[class_id]
                     if np.isnan(miou):
                         print(f"{cname:15s}:  n/a")
                     else:
