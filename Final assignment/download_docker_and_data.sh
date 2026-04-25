@@ -3,13 +3,13 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=9
 #SBATCH --gpus=1
-#SBATCH --partition=gpu_a100
+#SBATCH --partition=gpu_mig
 #SBATCH --time=3:00:00
 
 # Pull container from dockerhub
-apptainer pull container_v2.sif docker://brandonmhlim/nncv:v2
+apptainer pull container.sif docker://cclaess/5lsm0:v1
 
 # Use the huggingface-cli package inside the container to download the data
-# mkdir -p data
-# apptainer exec container.sif \
-#     huggingface-cli download TimJaspersTue/5LSM0 --local-dir ./data --repo-type dataset
+mkdir -p data
+apptainer exec container.sif \
+    huggingface-cli download TimJaspersTue/5LSM0 --local-dir ./data --repo-type dataset

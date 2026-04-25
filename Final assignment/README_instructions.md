@@ -78,3 +78,179 @@ NNCV-main/
         ├── frankfurt/
         ├── lindau/
         └── munster/
+```
+
+## Starting training
+
+Training is performed on Snellius using the SLURM job script. The user is assumed to already have the required data, container, `.env` file, and implementation files in place.
+
+### 1. Go to the project folder on Snellius
+
+### 2. Select the model to train
+
+Open `config.py` and set the desired model:
+
+```python
+MODEL_TYPE = "segformer"
+```
+
+or:
+
+```python
+MODEL_TYPE = "unet"
+```
+The training command is defined in `main.sh`.
+
+For SegFormer, the script runs:
+
+```bash
+python3 unified_train.py \
+    --data-dir ./data/cityscapes \
+    --batch-size 16 \
+    --epochs 30 \
+    --lr 1e-4 \
+    --num-workers 12 \
+    --seed 42 \
+    --experiment-id "segformer"
+```
+
+For UNet, the script runs:
+
+```bash
+python3 unified_train.py \
+    --data-dir ./data/cityscapes \
+    --batch-size 16 \
+    --epochs 50 \
+    --lr 1e-4 \
+    --num-workers 12 \
+    --seed 42 \
+    --experiment-id "unet"
+```
+
+### 3. Submit the training job
+
+### 4. Extract weights 
+The trained weights used for the reported experiments are also provided in the `Final assignment/` folder:
+
+| File | Description |
+|---|---|
+| `model_segformer.pt` | SegFormer checkpoint without data augmentation. |
+| `model_segformer_w_aug.pt` | SegFormer checkpoint trained with data augmentation. |
+| `model_unet.pt` | Attention ResUNet checkpoint without data augmentation. |
+| `model_unet_w_aug.pt` | Attention ResUNet checkpoint trained with data augmentation. |
+
+These files can be used directly for inference or Docker submission without retraining the models. To use one of them, set the corresponding model type and checkpoint path in `config.py`.
+
+## Running inference
+
+Inference is handled by `predict.py`. The script loads the selected model checkpoint, processes input images, and writes predicted segmentation masks to an output folder.
+
+### 1. Select the model checkpoint
+
+Open `config.py` and set the model type and checkpoint path.
+
+Example for SegFormer with augmentation:
+
+```python
+MODEL_TYPE = "segformer"
+MODEL_PATH = "/app/model_segformer_w_aug.pt"
+```
+
+Example for SegFormer without augmentation:
+
+```python
+MODEL_TYPE = "segformer"
+MODEL_PATH = "/app/model_segformer.pt"
+```
+
+Example for Attention ResUNet with augmentation:
+
+```python
+MODEL_TYPE = "unet"
+MODEL_PATH = "/app/model_unet_w_aug.pt"
+```
+
+Example for Attention ResUNet without augmentation:
+
+```python
+MODEL_TYPE = "unet"
+MODEL_PATH = "/app/model_unet.pt"
+```
+
+The `MODEL_TYPE` must match the checkpoint. For example, do not load a UNet checkpoint while `MODEL_TYPE` is set to `"segformer"`.
+
+### 2. Build the Docker image
+
+From the repository root, run:
+
+```bash
+docker build -t nncv-submission:latest -f "Final assignment/Dockerfile" "Final assignment"
+```
+
+The Dockerfile copies the required inference files into the container, including:
+
+```text
+predict.py
+config.py
+UNet.py
+Segformer.py
+model_segformer.pt
+model_segformer_w_aug.pt
+model_unet.pt
+model_unet_w_aug.pt
+mit-b1/
+```
+
+### 3. Prepare local input and output folders
+
+For local testing, place input images in:
+
+```text
+local_data/
+```
+
+Create an output folder:
+
+```text
+local_output/
+```
+
+### 4. Run inference locally
+
+On Windows PowerShell:
+
+```powershell
+docker run --rm 
+  -v "${PWD}\local_data:/data" 
+  -v "${PWD}\local_output:/output" 
+  -v "${PWD}\cityscape-adverse:/cityscape-adverse" 
+  nncv-submission:latest
+```
+The predicted masks are saved to `local_output/` with the same filenames as the input images.
+
+### 5. Run local adverse-weather evaluation
+
+If the `cityscape-adverse/` folder is available locally, it can also be mounted into the Docker container.
+
+If `/cityscape-adverse` exists inside the container, `predict.py` also computes per-weather, per-class IoU scores for the local adverse-weather validation set.
+
+If `/cityscape-adverse` is not mounted, the script skips this local evaluation and only performs standard inference on `/data`.
+
+### 6. Export the Docker image for challenge submission
+
+### 7. Inference summary
+
+The inference workflow is:
+
+```text
+local_data/*.png
+        ↓
+Docker container
+        ↓
+predict.py
+        ↓
+selected model from config.py
+        ↓
+local_output/*.png
+```
+

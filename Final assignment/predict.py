@@ -24,9 +24,6 @@ from torchvision.transforms.v2 import (
 from config import MODEL_TYPE, MODEL_PATH
 from tqdm import tqdm
 
-print(torch.cuda.is_available())
-print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "No CUDA GPU")
-
 # Fixed paths inside participant container
 # Do NOT chnage the paths, these are fixed locations where the server will 
 # provide input data and expect output data.
@@ -256,13 +253,13 @@ def main():
                     else:
                         mean_per_class[class_id] = np.nan # if there are no valid iou values for the class, set it to nan
 
-                print(f"{weather}")
-                for class_id, miou in mean_per_class.items():
-                    cname = class_names[class_id]
-                    if np.isnan(miou):
-                        print(f"{cname:15s}:  n/a")
-                    else:
-                        print(f"{cname:15s}:  {miou:.4f}")
+                #print(f"{weather}")
+                #for class_id, miou in mean_per_class.items():
+                #    cname = class_names[class_id]
+                #    if np.isnan(miou):
+                #        print(f"{cname:15s}:  n/a")
+                #    else:
+                #        print(f"{cname:15s}:  {miou:.4f}")
             ######## added ########
             
         else:
