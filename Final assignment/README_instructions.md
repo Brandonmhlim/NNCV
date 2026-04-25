@@ -1,3 +1,7 @@
+## Submission information
+
+| Username : Brandonmhlim | Best model : SegFormer  | Email : m.h.lim@student.tue.nl |
+
 ## Starting point and required files
 
 This repository is based on the provided 5LSM0 final assignment template. The original course instructions are still included in the repository. This README mainly documents the implementation-specific files that were added or modified for this project.
