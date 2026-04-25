@@ -10,13 +10,13 @@ The most important files are:
 
 | File | Purpose |
 |---|---|
-| `config.py` | Selects which model to use, either `segformer` or `unet`, and defines the model checkpoint path used during inference. |
-| `UNet.py` | Contains the Attention ResUNet model implementation. |
-| `Segformer.py` | Contains the SegFormer model implementation. |
-| `unified_train.py` | Main training script used for both UNet and SegFormer. It selects the model based on `config.py`. |
-| `main.sh` | Shell script that launches training with the chosen model and hyperparameters. This is executed inside the cluster container. |
-| `jobscript_slurm.sh` | SLURM job script used to run `main.sh` on Snellius. General usage is explained in `README-Slurm.md`. |
-| `predict.py` | Inference script used inside the Docker submission container. |
+| `config.py` | Selects which model to use, either `segformer` or `unet`.|
+| `UNet.py` | Attention ResUNet model. |
+| `Segformer.py` | SegFormer model. |
+| `unified_train.py` | Main training script selects the model based on `config.py`. |
+| `main.sh` | Shell script that launches training with the chosen model and hyperparameters.|
+| `jobscript_slurm.sh` | SLURM job script used to run `main.sh` on Snellius.|
+| `predict.py` | Inference script used inside the Docker submission container.|
 | `Dockerfile` | Builds the Docker image for challenge-server submission. General Docker submission steps are explained in `README-Submission.md`. |
 
 ### Files/directories not included by default
@@ -26,9 +26,9 @@ Some files and folders are generated, downloaded, or added separately and are th
 | File/folder | Location | How it is obtained |
 |---|---|---|
 | `data/` | Snellius | Downloaded using the course-provided `download_docker_and_data.sh` script. This contains the original Cityscapes data used for training and validation. See `README-Slurm.md`. |
-| `container.sif` | Snellius | Downloaded using `download_docker_and_data.sh`. This is the Singularity container used to run the project on Snellius. See `README-Slurm.md`. |
-| Adverse Cityscapes dataset | Local machine | Added separately. This dataset is used only for the local weather-condition evaluation and is not part of the default course template. It can be downloaded from Hugging Face: `https://huggingface.co/datasets/naufalso/cityscape-adverse/viewer`. Only the validation split is needed. |
-| Matching original Cityscapes validation labels | Local machine | Added separately. The adverse-weather images need to be evaluated against the matching original Cityscapes validation ground-truth labels. Download `gtFine_trainvaltest.zip` from the official Cityscapes download page and use the `gtFine/val/` folder. |
+| `container.sif` | Snellius | Downloaded using `download_docker_and_data.sh|
+| Adverse Cityscapes dataset | Local machine | Added separately. This dataset is used only for the local weather-condition evaluation. It can be downloaded from Hugging Face: `https://huggingface.co/datasets/naufalso/cityscape-adverse/viewer`. Only the validation split is needed. |
+| Matching original Cityscapes validation labels | Local machine | Added separately. Download `gtFine_trainvaltest.zip` from the official Cityscapes download page and use the `gtFine/val/` folder. |
 | `mit-b1/` | Local machine / Docker build context | Added separately when using SegFormer with local pretrained weights. Download the model files from `https://huggingface.co/nvidia/mit-b1` and place the complete folder inside `Final assignment/` as `Final assignment/mit-b1/`. This location is required because the submission `Dockerfile` expects the folder to be available in the same build context as `predict.py`, `config.py`, `Segformer.py`, and the selected model checkpoint. |
 
 
@@ -45,34 +45,11 @@ NNCV-main/
     │   ├── dawn/
     │   │   ├── frankfurt/
     │   │   ├── lindau/
-    │   │   └── munster/
-    │   ├── foggy/
-    │   │   ├── frankfurt/
-    │   │   ├── lindau/
-    │   │   └── munster/
-    │   ├── night/
-    │   │   ├── frankfurt/
-    │   │   ├── lindau/
-    │   │   └── munster/
-    │   ├── original/
-    │   │   ├── frankfurt/
-    │   │   ├── lindau/
-    │   │   └── munster/
-    │   ├── rainy/
-    │   │   ├── frankfurt/
-    │   │   ├── lindau/
-    │   │   └── munster/
-    │   ├── snow/
-    │   │   ├── frankfurt/
-    │   │   ├── lindau/
-    │   │   └── munster/
-    │   ├── spring/
-    │   │   ├── frankfurt/
-    │   │   ├── lindau/
-    │   │   └── munster/
-    │   └── sunny/
-    │       ├── frankfurt/
-    │       ├── lindau/
+            .
+            .
+            .
+            .
+            .
     │       └── munster/
     └── val_label/
         ├── frankfurt/
@@ -81,14 +58,13 @@ NNCV-main/
 ```
 
 ## Starting training
-
-Training is performed on Snellius using the SLURM job script. The user is assumed to already have the required data, container, `.env` file, and implementation files in place.
+The user is assumed to already have the required data, container, `.env` file, and implementation files in place.
 
 ### 1. Go to the project folder on Snellius
 
 ### 2. Select the model to train
 
-Open `config.py` and set the desired model:
+Open `config.py` and set the model:
 
 ```python
 MODEL_TYPE = "segformer"
